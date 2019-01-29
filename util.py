@@ -34,6 +34,7 @@ def format_phone(phone):
 
         correct_num = format_plusfourfour(char_number)
 
+        # return the formatted number
         return correct_num
 
     # for all 07 - delete 0 and add +44
