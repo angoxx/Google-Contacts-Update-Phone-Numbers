@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import util
+import time
 
 # Contacts Scope for the api
 SCOPES = ['https://www.googleapis.com/auth/contacts']
@@ -67,6 +68,8 @@ def main():
 
             if formatted_number:
                 print(name + " : " + phone + " -> " + formatted_number)
+
+                time.sleep(1)
 
                 # Update contacts numbers
                 service.people().updateContact(
