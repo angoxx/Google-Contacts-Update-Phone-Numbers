@@ -6,7 +6,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import util
 
-# Contacts Scope
+# Contacts Scope for the api
 SCOPES = ['https://www.googleapis.com/auth/contacts']
 
 
@@ -42,12 +42,13 @@ def main():
     # Call the People API
     results = service.people().connections().list(
         resourceName='people/me',
+        pageSize=1900,
         personFields='names,emailAddresses,phoneNumbers').execute()
     connections = results.get('connections', [])
 
     for person in connections:
 
-        # Get etag and resourceName - needed for update
+        # Get etag and resourceName by person - needed for proceed to the update
         etag = person.get('etag')
         resourcename = person.get('resourceName')
 
@@ -65,8 +66,7 @@ def main():
             formatted_number = util.format_phone(phone)
 
             if formatted_number:
-                print(name + " " + phone)
-                print(formatted_number)
+                print(name + " : " + phone + " -> " + formatted_number)
 
                 # Update contacts numbers
                 service.people().updateContact(
