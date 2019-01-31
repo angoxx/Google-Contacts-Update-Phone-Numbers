@@ -12,8 +12,8 @@ Update every phone number on Google Contacts using the Google people api.
 
 # Requirements
 
-`
+```
 pip install phonenumbers
 pip install google-api-python-client
 pip install backoff
-`
+```
