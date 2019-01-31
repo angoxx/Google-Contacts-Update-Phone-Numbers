@@ -1,66 +1,98 @@
 from __future__ import print_function
+import pickle
+import os.path
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import backoff
+import traceback
+import csv
+import phonenumbers
 
 
-def format_plusfourfour(char_number):
-    if char_number[3] != '1' or char_number[4] != '1':
-        # delete every non int
-        count = 0
-        for x in char_number:
-            count += 1
-            if x == ' ' or x == '.' or x == '-':
-                char_number.pop(count - 1)
+def connection():
+    """ Connection to the google people api """
 
-        # Check if it's a mobile number
-        if char_number[3] == '7':
+    credentials = None
 
-            # check if phone number have the correct len - 13 - +440000000000
-            if len(char_number) == 13:
-                char_number.insert(3, ' ')
-                char_number.insert(8, ' ')
+    # Contacts Scope for the api
+    scopes = ['https://www.googleapis.com/auth/contacts']
 
-        # return the formatted number
-        correct_num = "".join(str(x) for x in char_number)
-        return correct_num
+    # The file token.pickle stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            credentials = pickle.load(token)
+
+    # If there are no (valid) credentials available, let the user log in.
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', scopes)
+            credentials = flow.run_local_server()
+
+        # Save the credentials for the next run
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(credentials, token)
+
+    service = build('people', 'v1', credentials=credentials)
+
+    # Call the People API
+    results = service.people().connections().list(
+        resourceName='people/me',
+        pageSize=1900,
+        personFields='names,emailAddresses,phoneNumbers').execute()
+    connections = results.get('connections', [])
+
+    return connections, service
 
 
-def format_phone(phone):
-    """Reformat every uk mobile number to the correct format like: +44 0123 456789"""
+def handle_backoff(details):
+    """ Show the error during a backoff """
 
-    char_number = list(phone)
+    print("Backing off {wait:0.1f} seconds afters {tries} tries "
+          "calling function {target} with args {args} and kwargs "
+          "{kwargs}".format(**details))
+    traceback.print_exc()
 
-    # for all ++44 - delete one +
-    if char_number[1] == "+":
-        char_number.pop(1)
 
-        correct_num = format_plusfourfour(char_number)
+@backoff.on_exception(backoff.expo, HttpError, max_tries=5, on_backoff=handle_backoff)
+def update_formatted_number(service, resource_name, etag, formatted_number):
+    """ Update on Google Contacts the phone number """
 
-        # return the formatted number
-        return correct_num
+    # Update contacts numbers
+    service.people().updateContact(
+        resourceName=resource_name,
+        body={
+            'resourceName': 'people/*',
+            'etag': etag,
+            "phoneNumbers": [{"value": formatted_number}]
+        },
+        updatePersonFields="phoneNumbers",
+    ).execute()
 
-    # for all 07 - delete 0 and add +44
-    elif char_number[0] == "0" and char_number[1] == '7':
-        char_number.pop(0)
-        # 7000 000000 or 7000 000 000
-        char_number.insert(0, "+")
-        char_number.insert(1, "4")
-        char_number.insert(2, "4")
 
-        # return the formatted number
-        correct_num = format_plusfourfour(char_number)
-        return correct_num
+def blank_name_to_csv(blank_lst):
+    """ Add a list of blank name to a CSV file """
 
-    # for all +44
-    elif char_number[0] == '+' and char_number[1] == '4' and char_number[2] == '4':
+    # Add the list of blank name to a csv file
+    with open('blank_name.csv', 'wb') as csv_file:
+        wr = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
+        wr.writerow(blank_lst)
 
-        if char_number[3] == '7' or char_number[3] == ' ' and char_number[4] == '7':
-            correct_num = format_plusfourfour(char_number)
-            return correct_num
 
-    # For no + before 44
-    elif char_number[0] == '4' and char_number[1] == '4' and char_number[2] == '7':
-        char_number.insert(0, '+')
+def format_numbers(phone):
+    """ Format the phone number with the phonenumbers library """
 
-        correct_num = format_plusfourfour(char_number)
+    # Parse the number in the library and return the phone code and the national number
+    unformatted = phonenumbers.parse(phone, "GB")
 
-        # return the formatted number
-        return correct_num
+    # Format the parsed number to the international format
+    formatted = phonenumbers.format_number(unformatted, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
+
+    # Return the formatted number
+    return formatted
