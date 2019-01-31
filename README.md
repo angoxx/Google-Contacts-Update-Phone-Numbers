@@ -18,6 +18,8 @@ pip install google-api-python-client
 pip install backoff
 ```
 
+The script use Python 3
+
 # About
 
 This script use the phonenumbers library for formatting correctly all numbers with all country phone code. It use the Google people api for getting and updatting all numbers. When the script have finished, a CSV file will be created in the same folder as the script. If you have any contact with a phone number but without a name, the phone number will be added to the file. You'll be able to see if you have a phone number without a name and change it.
