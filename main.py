@@ -1,86 +1,54 @@
 from __future__ import print_function
-import pickle
-import os.path
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 import util
-import time
-
-# Contacts Scope for the api
-SCOPES = ['https://www.googleapis.com/auth/contacts']
 
 
 def main():
-    """Update phone number in google contacts
+    """
+    - Update mobile number in google contacts to correct format -
     """
 
-    # Connect to GContacts
-    creds = None
+    # Connect to GContacts by Google People API
+    connections, service = util.connection()
 
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
+    # Blank name list
+    blank_lst = []
 
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server()
-
-        # Save the credentials for the next run
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-
-    service = build('people', 'v1', credentials=creds)
-
-    # Call the People API
-    results = service.people().connections().list(
-        resourceName='people/me',
-        pageSize=1900,
-        personFields='names,emailAddresses,phoneNumbers').execute()
-    connections = results.get('connections', [])
-
+    # Get every GContacts users one by one
     for person in connections:
 
         # Get etag and resourceName by person - needed for proceed to the update
         etag = person.get('etag')
-        resourcename = person.get('resourceName')
+        resource_name = person.get('resourceName')
 
         # Get the name by person
         names = person.get('names', [])
+        name = ""
         if names:
             name = names[0].get('displayName')
 
         # Get the phone number by person
         phones = person.get('phoneNumbers', [])
         if phones:
-            phone = phones[0].get('value')
+            phone_value = phones[0].get('value')
 
-            # Call list of formatted numbers
-            formatted_number = util.format_phone(phone)
+            # Format the number and return it
+            formatted_number = util.format_numbers(phone_value)
 
-            if formatted_number:
-                print(name + " : " + phone + " -> " + formatted_number)
+            # if there is a formatted number, update it in GContacts
+            if formatted_number != "":
 
-                time.sleep(1)
+                # Show the difference
+                print(name + " : " + str(phone_value) + " -> " + str(formatted_number))
 
-                # Update contacts numbers
-                service.people().updateContact(
-                    resourceName=resourcename,
-                    body={
-                        'resourceName': 'people/*',
-                        'etag': etag,
-                        "phoneNumbers": [{"value": formatted_number}]
-                    },
-                    updatePersonFields="phoneNumbers",
-                ).execute()
+                # Update the phone number in Google Contacts
+                util.update_formatted_number(service, resource_name, etag, formatted_number)
+
+                # Add the number in a list if the name is blank
+                if name == "":
+                    blank_lst.append(formatted_number)
+
+    # Add the list of blank name in a CSV file
+    util.blank_name_to_csv(blank_lst)
 
 
 if __name__ == '__main__':
